@@ -9,29 +9,40 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*"
-  }
+    origin: "*",
+  },
 });
 
-const rooms = {};
+const rooms = {}; // Room codes: [socket1, socket2]
+const playerNames = {}; // Player names for each room
 
 io.on("connection", (socket) => {
-  socket.on("createRoom", () => {
+  socket.on("createRoom", (name) => {
     const code = Math.random().toString(36).substring(2, 7).toUpperCase();
     rooms[code] = [socket.id];
+    playerNames[code] = { X: name, O: "" };
     socket.join(code);
-    socket.emit("roomCreated", code);
+    socket.emit("roomCreated", { code });
   });
 
-  socket.on("joinRoom", (code) => {
+  socket.on("joinRoom", ({ code, playerName }) => {
     const room = rooms[code];
     if (room && room.length === 1) {
       room.push(socket.id);
+      playerNames[code].O = playerName;
       socket.join(code);
 
-      // Notify both players of game start
-      io.to(room[0]).emit("startGame", { symbol: "X", turn: true });
-      io.to(room[1]).emit("startGame", { symbol: "O", turn: false });
+      io.to(room[0]).emit("startGame", {
+        symbol: "X",
+        turn: true,
+        players: playerNames[code],
+      });
+
+      io.to(room[1]).emit("startGame", {
+        symbol: "O",
+        turn: false,
+        players: playerNames[code],
+      });
     }
   });
 
@@ -41,6 +52,10 @@ io.on("connection", (socket) => {
 
   socket.on("reset", (code) => {
     io.to(code).emit("reset");
+  });
+
+  socket.on("chat", ({ code, name, message }) => {
+    io.to(code).emit("chat", { name, message });
   });
 });
 
