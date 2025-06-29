@@ -4,35 +4,34 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // allow all origins (frontend)
-    methods: ["GET", "POST"]
+    origin: "*"
   }
 });
-
-app.use(cors());
 
 const rooms = {};
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
   socket.on("createRoom", () => {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code = Math.random().toString(36).substring(2, 7).toUpperCase();
     rooms[code] = [socket.id];
     socket.join(code);
     socket.emit("roomCreated", code);
-    console.log(`Room ${code} created`);
   });
 
   socket.on("joinRoom", (code) => {
-    if (rooms[code] && rooms[code].length === 1) {
-      rooms[code].push(socket.id);
+    const room = rooms[code];
+    if (room && room.length === 1) {
+      room.push(socket.id);
       socket.join(code);
-      io.to(code).emit("startGame");
-      console.log(`User joined room ${code}`);
+
+      // Notify both players of game start
+      io.to(room[0]).emit("startGame", { symbol: "X", turn: true });
+      io.to(room[1]).emit("startGame", { symbol: "O", turn: false });
     }
   });
 
@@ -43,21 +42,12 @@ io.on("connection", (socket) => {
   socket.on("reset", (code) => {
     io.to(code).emit("reset");
   });
-
-  socket.on("disconnect", () => {
-    for (const code in rooms) {
-      rooms[code] = rooms[code].filter((id) => id !== socket.id);
-      if (rooms[code].length === 0) delete rooms[code];
-    }
-    console.log("User disconnected:", socket.id);
-  });
 });
 
 app.get("/", (req, res) => {
-  res.send("Tic Tac Toe Server is running...");
+  res.send("Tic Tac Toe Server is Running");
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(3000, () => {
+  console.log("Server started on port 3000");
 });
