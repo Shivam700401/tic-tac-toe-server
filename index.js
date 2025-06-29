@@ -4,18 +4,27 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: {
+    origin: "*", // allow all origins (frontend)
+    methods: ["GET", "POST"]
+  }
+});
+
+app.use(cors());
 
 const rooms = {};
 
 io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
   socket.on("createRoom", () => {
-    const code = Math.random().toString(36).substr(2, 5).toUpperCase();
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     rooms[code] = [socket.id];
     socket.join(code);
     socket.emit("roomCreated", code);
+    console.log(`Room ${code} created`);
   });
 
   socket.on("joinRoom", (code) => {
@@ -23,8 +32,7 @@ io.on("connection", (socket) => {
       rooms[code].push(socket.id);
       socket.join(code);
       io.to(code).emit("startGame");
-    } else {
-      socket.emit("error", "Room not available");
+      console.log(`User joined room ${code}`);
     }
   });
 
@@ -35,6 +43,21 @@ io.on("connection", (socket) => {
   socket.on("reset", (code) => {
     io.to(code).emit("reset");
   });
+
+  socket.on("disconnect", () => {
+    for (const code in rooms) {
+      rooms[code] = rooms[code].filter((id) => id !== socket.id);
+      if (rooms[code].length === 0) delete rooms[code];
+    }
+    console.log("User disconnected:", socket.id);
+  });
 });
 
-server.listen(3000);
+app.get("/", (req, res) => {
+  res.send("Tic Tac Toe Server is running...");
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
